@@ -1,30 +1,24 @@
 const webdriver = require('selenium-webdriver'),
-    By = webdriver.By,
-    LOGINURL = 'https://www.epicpass.com/account/login.aspx',
-    BOOKINGURL = 'https://www.epicpass.com/plan-your-trip/lift-access/reservations.aspx',
-    EMAIL = 'ethan.g.907@gmail',
-    PW = 'Boomer2020!';
-
-var accountSid = 'ACf4338e5374f2f4c678b96007495aeedd'; // Your Account SID from www.twilio.com/console
-var authToken = '88747b47b1bc44719d1ce9ced767469a'; // Your Auth Token from www.twilio.com/console
-var twilio = require('twilio');
-var client = new twilio(accountSid, authToken);
+        By = webdriver.By,
+        LOGINURL = 'https://www.epicpass.com/account/login.aspx',
+        BOOKINGURL = 'https://www.epicpass.com/plan-your-trip/lift-access/reservations.aspx',
+        EMAIL = 'ethan.g.907@gmail',
+        PW = 'Boomer2020!',
+        cron = require('node-cron'),
+        accountSid = 'ACf4338e5374f2f4c678b96007495aeedd',
+        authToken = 'a911df2099c7f61d3eea7667404a4f01',
+        twilio = require('twilio'),
+        client = new twilio(accountSid, authToken);
 
 const driver = new webdriver.Builder()
     .forBrowser('firefox')
     .build();
 
-driver.get('https://www.epicpass.com/account/my-account.aspx').then(function() {
-    driver.findElement(By.css('[data-user-authentication-status="logged out"]')).isDisplayed().then(function(loggedOut) {
-        if (loggedOut) {
-            login()
-            .then(gotoBooking)
-        }
-    });
-})
-
-
 login = () => {
+    let date = new Date(),
+        timeStamp = date.toLocaleString('en-US', { timeZone: 'EST' });
+    console.log('Checking Availability - ', timeStamp);
+
     return driver.get(LOGINURL).then(function () {
         let emailInput = driver.findElement(By.css('#txtUserName_3'));
         let pwInput = driver.findElement(By.css('#txtPassword_3'));
@@ -55,24 +49,22 @@ viewResortCalendar = () => {
 }
 
 checkDesiredDates = () => {
-    console.log('checking!');
+    console.log('Checking Stowe availability for weekend of March 13th and 14th!');
     let message = '';
-    
+
     setTimeout(() => {    
-        driver.findElement(By.css('button.passholder_reservations__calendar__day:nth-child(12)')).isEnabled().then(function (fridayAvailable) {
-            if (fridayAvailable) {
-                message += 'Skiing spots open at Stowe on Friday March 12th ';
-            }
-        }).then(driver.findElement(By.css('button.passholder_reservations__calendar__day:nth-child(13)')).isEnabled().then(function(saturdayAvailable) {
+        driver.findElement(By.css('button.passholder_reservations__calendar__day:nth-child(13)')).isEnabled().then(function(saturdayAvailable) {
             if (saturdayAvailable) {
                 message += 'Skiing spots open at Stowe on Saturday March 13th ';
             }
-        })).then(driver.findElement(By.css('button.passholder_reservations__calendar__day:nth-child(14)')).isEnabled().then(function (sundayAvailable) {
+        }).then(driver.findElement(By.css('button.passholder_reservations__calendar__day:nth-child(14)')).isEnabled().then(function (sundayAvailable) {
             if (sundayAvailable) {
                 message += 'Skiing spots open at Stowe on Sunday March 14th ';
             }
         })).then(function() {
-            if (message) { sendText(message) }
+            if (message) {
+                sendText(message)
+            }
         });
     }, 2000);
 }
@@ -80,11 +72,12 @@ checkDesiredDates = () => {
 sendText = (msg) => {
     console.log('sending to Twilio: ', msg);
     client.messages.create({
-        body: `${msg}`,
-        to: '+17817388261', // Text this number
-        from: '+12513339287' // From a valid Twilio number
-    })
-    .then((message) => console.log(message.sid));
+        body: msg,
+        from: '+12513339287',
+        to: '+19079478385'
+    }).then((msg)=> {
+        console.log('message sent; ', msg, message.sid)
+    });
 }
 
 gotoBooking = () => {
@@ -93,6 +86,14 @@ gotoBooking = () => {
                 driver.findElement(By.css('#onetrust-banner-sdk')).then(function(el) {
                     driver.executeScript("arguments[0].remove();", el);
                 }).then(viewResortCalendar).then(checkDesiredDates)
-           }, 5000);
+           }, 6000);
     });
 }
+
+// kick off the checker
+login().then(gotoBooking);
+
+// continue to check every minute
+cron.schedule('*/1 * * * *', () => {
+    login().then(gotoBooking)
+});
